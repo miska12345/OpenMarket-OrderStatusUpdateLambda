@@ -19,6 +19,9 @@ Resources:
       Environment:
         Variables:
           JAVA_TOOL_OPTIONS: -Dlog4j.configurationFile=log4j2.xml
+          DB_URL: your-db-url
+          DB_USER: admin
+          DB_PASS: password
       Events:
         SNSEvent:
           Type: SNS
