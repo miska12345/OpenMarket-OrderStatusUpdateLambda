@@ -14,6 +14,8 @@ import com.amazonaws.services.dynamodbv2.model.ProjectionType;
 import com.amazonaws.services.dynamodbv2.model.ProvisionedThroughput;
 import com.amazonaws.services.dynamodbv2.model.ScalarAttributeType;
 import com.google.common.collect.ImmutableList;
+import io.openmarket.marketplace.dao.ItemDao;
+import io.openmarket.marketplace.dao.ItemDaoImpl;
 import io.openmarket.order.dao.OrderDao;
 import io.openmarket.order.dao.OrderDaoImpl;
 import io.openmarket.order.model.ItemInfo;
@@ -42,6 +44,8 @@ import java.util.stream.Stream;
 import static io.openmarket.config.OrderConfig.*;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 public class OrderUpdateLambdaTest {
     private static final String BUYER_ID = "tom";
@@ -54,6 +58,7 @@ public class OrderUpdateLambdaTest {
     private AmazonDynamoDB dbClient;
     private DynamoDBMapper dbMapper;
     private OrderDao orderDao;
+    private ItemDao itemDao;
     private OrderUpdateLambda lambda;
 
     @BeforeAll
@@ -66,8 +71,11 @@ public class OrderUpdateLambdaTest {
         dbClient = localDBClient.amazonDynamoDB();
         dbMapper = new DynamoDBMapper(dbClient);
         orderDao = new OrderDaoImpl(dbClient, dbMapper);
-        lambda = new OrderUpdateLambda(orderDao);
+        itemDao = mock(ItemDao.class);
+        lambda = new OrderUpdateLambda(orderDao, itemDao);
         createTable();
+
+        when(itemDao.updateItemStock(any())).thenReturn(new ArrayList<>());
     }
 
     @AfterEach
@@ -89,6 +97,7 @@ public class OrderUpdateLambdaTest {
 
         Order updatedOrder = orderDao.load(ORDER_ID).get();
         assertEquals(OrderStatus.PAYMENT_CONFIRMED, updatedOrder.getStatus());
+        verify(itemDao, times(0)).updateItemStock(anyMap());
     }
 
     @Test
@@ -100,6 +109,7 @@ public class OrderUpdateLambdaTest {
 
         Order updatedOrder = orderDao.load(ORDER_ID).get();
         assertEquals(OrderStatus.PAYMENT_NOT_RECEIVED, updatedOrder.getStatus());
+        verify(itemDao, times(1)).updateItemStock(anyMap());
     }
 
     @Test
@@ -107,6 +117,7 @@ public class OrderUpdateLambdaTest {
         TransactionTaskResult taskResult = generateTaskResult(TRANSACTION_ID, TransactionErrorType.NONE,
                 TransactionStatus.COMPLETED);
         assertDoesNotThrow(() -> lambda.updateOrderStatus(taskResult));
+        verify(itemDao, times(0)).updateItemStock(anyMap());
     }
 
     @ParameterizedTest
@@ -172,7 +183,7 @@ public class OrderUpdateLambdaTest {
                 .transactionId(transactionId)
                 .currency(CURRENCY)
                 .items(ImmutableList.of(ItemInfo.builder()
-                        .itemId("a13")
+                        .itemId(1)
                         .itemName("Cup")
                         .price(5.0)
                         .quantity(2)
